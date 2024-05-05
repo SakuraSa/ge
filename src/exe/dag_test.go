@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/SakuraSa/ge/src/concept"
 )
@@ -100,6 +101,52 @@ func Test_checkCycle(t *testing.T) {
 	}
 }
 
+func Test_checkUnknownDep(t *testing.T) {
+	type args struct {
+		d DAG
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "empty",
+			args: args{
+				d: DAG{},
+			},
+			wantErr: false,
+		},
+		{
+			name: "normal",
+			args: args{
+				d: DAG{
+					nodes: []concept.Task{nil, nil},
+					edges: [][]int{{1}, {}},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "unkown",
+			args: args{
+				d: DAG{
+					nodes: []concept.Task{nil, nil},
+					edges: [][]int{{1}, {9}},
+				},
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := checkUnknownDep(tt.args.d); (err != nil) != tt.wantErr {
+				t.Errorf("checkUnknownDep() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestDAG(t *testing.T) {
 	type buildArgs struct {
 		task concept.Task
@@ -161,6 +208,56 @@ func TestDAG(t *testing.T) {
 					}),
 					name: "4",
 					deps: []string{"1", "3"},
+				},
+			},
+			checker: func(ctx context.Context) error {
+				v := ctx.Value(testKey).(*TestValue)
+				if v.String() != "4,3,2,1" {
+					return fmt.Errorf("unexpected value: %s", v.String())
+				}
+				return nil
+			},
+			wantErr: false,
+		},
+		{
+			name: "wildcard",
+			ctx:  context.WithValue(context.Background(), testKey, &TestValue{}),
+			children: []buildArgs{
+				{
+					task: T(func(ctx context.Context) error {
+						v := ctx.Value(testKey).(*TestValue)
+						v.Values = append(v.Values, "1")
+						return nil
+					}),
+					name: "task-1",
+					deps: nil,
+				},
+				{
+					task: T(func(ctx context.Context) error {
+						v := ctx.Value(testKey).(*TestValue)
+						v.Values = append(v.Values, "2")
+						return nil
+					}),
+					name: "task-2",
+					deps: []string{"task-1"},
+				},
+				{
+					task: T(func(ctx context.Context) error {
+						v := ctx.Value(testKey).(*TestValue)
+						v.Values = append(v.Values, "3")
+						return nil
+					}),
+					name: "task-3",
+					deps: []string{"task-2"},
+				},
+				{
+					task: T(func(ctx context.Context) error {
+						v := ctx.Value(testKey).(*TestValue)
+						v.Values = append(v.Values, "4")
+						return nil
+					}),
+					name: "task-4",
+					deps: []string{"task-[13]"},
 				},
 			},
 			checker: func(ctx context.Context) error {
@@ -254,4 +351,45 @@ func TestDAG(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("ctx done", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		b := NewDAGBuilder()
+		b.AddNode("sleep", T(func(ctx context.Context) error {
+			time.Sleep(time.Millisecond * 100)
+			return nil
+		}))
+		s, err := b.Build()
+		if err != nil {
+			t.Errorf("DAG.Build() error = %v", err)
+			return
+		}
+		err = s.Do(ctx)
+		if err != context.Canceled {
+			t.Errorf("DAG.Do() error = %v, wantErr %v", err, context.Canceled)
+		}
+	})
+
+	t.Run("build err:cycle", func(t *testing.T) {
+		b := NewDAGBuilder()
+		b.AddNode("1", T(func(ctx context.Context) error {
+			return nil
+		}), "1")
+		_, err := b.Build()
+		if err == nil {
+			t.Errorf("DAG.Build() error = %v, wantErr %v", err, true)
+		}
+	})
+
+	t.Run("build err:bad wildcard", func(t *testing.T) {
+		b := NewDAGBuilder()
+		b.AddNode("1", T(func(ctx context.Context) error {
+			return nil
+		}), "(")
+		_, err := b.Build()
+		if err == nil {
+			t.Errorf("DAG.Build() error = %v, wantErr %v", err, true)
+		}
+	})
 }

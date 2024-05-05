@@ -26,9 +26,14 @@ func (s Serial) Do(ctx context.Context) (err error) {
 	}()
 	var aops = GetAOP(ctx)
 	for _, current = range s.children {
-		f := aops.Apply(current.Do)
-		if err = f(ctx); err != nil {
-			return
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			f := aops.Apply(current.Do)
+			if err = f(ctx); err != nil {
+				return
+			}
 		}
 	}
 	return nil

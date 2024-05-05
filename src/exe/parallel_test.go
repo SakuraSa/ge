@@ -120,4 +120,17 @@ func TestParallel(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("ctx done", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		s := NewParallel(T(func(ctx context.Context) error {
+			time.Sleep(time.Millisecond * 100)
+			return nil
+		}))
+		err := s.Do(ctx)
+		if err != context.Canceled {
+			t.Errorf("Parallel.Do() error = %v, wantErr %v", err, context.Canceled)
+		}
+	})
 }
