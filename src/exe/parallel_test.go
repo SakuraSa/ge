@@ -82,7 +82,7 @@ func TestParallel(t *testing.T) {
 		},
 		{
 			name: "aop",
-			ctx: SetAOP(context.WithValue(context.Background(), testKey, &TestValue{}), &TestAOP{
+			ctx: SetAOP(context.WithValue(context.Background(), testKey, &TestValue{}), concept.AOPs{&TestAOP{
 				f: func(t concept.TaskFunc) concept.TaskFunc {
 					return func(ctx context.Context) error {
 						v := ctx.Value(testKey).(*TestValue)
@@ -90,7 +90,7 @@ func TestParallel(t *testing.T) {
 						return t(ctx)
 					}
 				},
-			}),
+			}}),
 			children: []concept.Task{
 				T(func(ctx context.Context) error {
 					return nil
