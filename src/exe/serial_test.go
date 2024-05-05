@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/SakuraSa/ge/src/concept"
 )
@@ -151,4 +152,17 @@ func TestSerial(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("ctx done", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		s := NewSerial(T(func(ctx context.Context) error {
+			time.Sleep(time.Millisecond * 100)
+			return nil
+		}))
+		err := s.Do(ctx)
+		if err != context.Canceled {
+			t.Errorf("Serial.Do() error = %v, wantErr %v", err, context.Canceled)
+		}
+	})
 }

@@ -3,6 +3,7 @@ package exe
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"runtime/debug"
 
 	"github.com/SakuraSa/ge/src/concept"
@@ -12,8 +13,9 @@ import (
 var (
 	_ concept.Task = DAG{}
 
-	ErrCycle     = fmt.Errorf("cycle detected in DAG")
-	ErrDuplicate = fmt.Errorf("duplicate node in DAG")
+	ErrCycle      = fmt.Errorf("cycle detected in DAG")
+	ErrDuplicate  = fmt.Errorf("duplicate node in DAG")
+	ErrUnknownDep = fmt.Errorf("unknown dep in DAG")
 )
 
 type DAG struct {
@@ -122,7 +124,22 @@ func (d *DAGBuilder) Build() (DAG, error) {
 	for name, deps := range d.edgeMap {
 		index := nodeIndex[name]
 		for _, dep := range deps {
-			edges[index] = append(edges[index], nodeIndex[dep])
+			depIndex, found := nodeIndex[dep]
+			if found {
+				edges[index] = append(edges[index], depIndex)
+				continue
+			}
+
+			reg, regErr := regexp.Compile(dep)
+			if regErr != nil {
+				return DAG{}, regErr
+			}
+
+			for depName, depIndex := range nodeIndex {
+				if reg.MatchString(depName) {
+					edges[index] = append(edges[index], depIndex)
+				}
+			}
 		}
 	}
 
@@ -131,7 +148,7 @@ func (d *DAGBuilder) Build() (DAG, error) {
 		edges: edges,
 	}
 
-	for _, f := range []func(DAG) error{checkCycle, checkDuplicate} {
+	for _, f := range DAGCheckers {
 		if err := f(dag); err != nil {
 			return dag, err
 		}
@@ -140,6 +157,14 @@ func (d *DAGBuilder) Build() (DAG, error) {
 	return dag, nil
 }
 
+// DAGChecker is a function to check the validity of a DAG
+type DAGChecker func(DAG) error
+
+var (
+	DAGCheckers = []DAGChecker{checkCycle, checkDuplicate, checkUnknownDep}
+)
+
+// checkCycle checks if there is a cycle in the DAG
 func checkCycle(d DAG) error {
 	var path []int
 	var visited = make([]int, len(d.nodes))
@@ -154,6 +179,7 @@ func checkCycle(d DAG) error {
 	return nil
 }
 
+// dfs is a helper function for checkCycle
 func dfs(d DAG, index int, path *[]int, visited []int) error {
 	visited[index] = 1
 	*path = append(*path, index)
@@ -172,10 +198,23 @@ func dfs(d DAG, index int, path *[]int, visited []int) error {
 	return nil
 }
 
+// checkDuplicate checks if there is a duplicate node in the DAG
 func checkDuplicate(d DAG) error {
 	for _, edges := range d.edges {
 		if !gslice.IsUniqe(edges) {
 			return ErrDuplicate
+		}
+	}
+	return nil
+}
+
+// checkUnknownDep checks if there is an unknown dep in the DAG
+func checkUnknownDep(d DAG) error {
+	for _, edges := range d.edges {
+		for _, edge := range edges {
+			if edge >= len(d.nodes) || edge < 0 {
+				return ErrUnknownDep
+			}
 		}
 	}
 	return nil

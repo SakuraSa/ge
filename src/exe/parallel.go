@@ -32,8 +32,13 @@ func (p Parallel) Do(ctx context.Context) error {
 		}(child)
 	}
 	for range p.children {
-		if err := <-errs; err != nil {
-			return err
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-errs:
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
