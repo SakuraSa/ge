@@ -3,6 +3,7 @@ package exe
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 
 	"github.com/SakuraSa/ge/src/concept"
 	"github.com/SakuraSa/ge/src/util/gslice"
@@ -50,8 +51,17 @@ func (d DAG) Do(ctx context.Context) error {
 			return ctx.Err()
 		case index := <-onReady:
 			go func() {
-				err := d.nodes[index].Do(ctx)
-				onFinnish <- Result{err, index}
+				var (
+					err   error
+					child = d.nodes[index]
+				)
+				defer func() {
+					if e := recover(); e != nil {
+						err = fmt.Errorf("task %s panic: %v\n%s", child, e, debug.Stack())
+					}
+					onFinnish <- Result{err, index}
+				}()
+				err = child.Do(ctx)
 			}()
 		case result := <-onFinnish:
 			if result.err != nil {

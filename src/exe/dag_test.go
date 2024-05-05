@@ -187,6 +187,21 @@ func TestDAG(t *testing.T) {
 			checker: func(ctx context.Context) error { return nil },
 			wantErr: true,
 		},
+		{
+			name: "panic",
+			ctx:  context.WithValue(context.Background(), testKey, &TestValue{}),
+			children: []buildArgs{
+				{
+					task: T(func(ctx context.Context) error {
+						panic("panic")
+					}),
+					name: "panic",
+					deps: nil,
+				},
+			},
+			checker: func(ctx context.Context) error { return nil },
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
