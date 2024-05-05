@@ -54,6 +54,7 @@ func (d DAG) Do(ctx context.Context) error {
 				var (
 					err   error
 					child = d.nodes[index]
+					f     = GetAOP(ctx).Apply(child.Do)
 				)
 				defer func() {
 					if e := recover(); e != nil {
@@ -61,7 +62,7 @@ func (d DAG) Do(ctx context.Context) error {
 					}
 					onFinnish <- Result{err, index}
 				}()
-				err = child.Do(ctx)
+				err = f(ctx)
 			}()
 		case result := <-onFinnish:
 			if result.err != nil {
