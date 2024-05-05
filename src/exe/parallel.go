@@ -2,6 +2,8 @@ package exe
 
 import (
 	"context"
+	"fmt"
+	"runtime/debug"
 
 	"github.com/SakuraSa/ge/src/concept"
 )
@@ -19,6 +21,11 @@ func (p Parallel) Do(ctx context.Context) error {
 	errs := make(chan error, len(p.children))
 	for _, child := range p.children {
 		go func(child concept.Task) {
+			defer func() {
+				if e := recover(); e != nil {
+					errs <- fmt.Errorf("task %s panic: %v\n%s", child, e, debug.Stack())
+				}
+			}()
 			errs <- child.Do(ctx)
 		}(child)
 	}

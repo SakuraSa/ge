@@ -69,6 +69,17 @@ func TestParallel(t *testing.T) {
 			checker: func(ctx context.Context) error { return nil },
 			wantErr: true,
 		},
+		{
+			name: "panic",
+			ctx:  context.WithValue(context.Background(), testKey, &TestValue{}),
+			children: []concept.Task{
+				T(func(ctx context.Context) error {
+					panic("panic")
+				}),
+			},
+			checker: func(ctx context.Context) error { return nil },
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
