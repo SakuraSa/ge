@@ -24,8 +24,10 @@ func (s Serial) Do(ctx context.Context) (err error) {
 			err = fmt.Errorf("task %s panic: %v\n%s", current, e, debug.Stack())
 		}
 	}()
+	var aops = GetAOP(ctx)
 	for _, current = range s.children {
-		if err = current.Do(ctx); err != nil {
+		f := aops.Apply(current.Do)
+		if err = f(ctx); err != nil {
 			return
 		}
 	}

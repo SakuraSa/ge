@@ -19,14 +19,16 @@ type Parallel struct {
 
 func (p Parallel) Do(ctx context.Context) error {
 	errs := make(chan error, len(p.children))
+	var aops = GetAOP(ctx)
 	for _, child := range p.children {
+		f := aops.Apply(child.Do)
 		go func(child concept.Task) {
 			defer func() {
 				if e := recover(); e != nil {
 					errs <- fmt.Errorf("task %s panic: %v\n%s", child, e, debug.Stack())
 				}
 			}()
-			errs <- child.Do(ctx)
+			errs <- f(ctx)
 		}(child)
 	}
 	for range p.children {
